@@ -49,6 +49,25 @@ const ListConnectionsInputSchema = z.object({
   ]),
 });
 
+// TODO: minimal schema for now
+const CreateDatamartDefinitionInputSchema = z.object({
+  name: z.string().min(1),
+  dataWarehouseType: z.enum(["bigquery"]),
+  description: z.string().optional(),
+  isRunnableConcurrently: z.boolean(),
+  datamartBigqueryOption: z
+    .object({
+      bigqueryConnectionId: z.number(),
+      queryMode: z.enum(["insert"]),
+      query: z.string(),
+      destinationDataset: z.string(),
+      destinationTable: z.string(),
+      writeDisposition: z.enum(["append", "truncate"]),
+    })
+    .optional()
+    .describe("required if dataWarehouseType is bigquery"),
+});
+
 type Connection = {
   id: string;
   name: string;
@@ -57,9 +76,66 @@ type Connection = {
 
 async function listConnections(
   input: z.infer<typeof ListConnectionsInputSchema>,
-) {
+): Promise<Connection[]> {
   const url = `https://trocco.io/api/connections/${input.connectionType}`;
-  return await withPagination<Connection>(url);
+  const connections = await withPagination<Connection>(url);
+  return connections.map((connection) => ({
+    id: connection.id,
+    name: connection.name,
+    description: connection.description,
+  }));
+}
+
+type DatamartDefinition = {
+  id: number;
+  name: string;
+  data_warehouse_type: string;
+  description: string;
+  is_runnable_concurrently: boolean;
+  datamart_bigquery_option?: {
+    bigquery_connection_id: number;
+    query_mode: string;
+    query: string;
+    destination_dataset: string;
+    destination_table: string;
+    write_disposition: string;
+  };
+};
+
+async function createDatamartDefinition(
+  input: z.infer<typeof CreateDatamartDefinitionInputSchema>,
+): Promise<DatamartDefinition> {
+  const url = `https://trocco.io/api/datamart_definitions`;
+  const options: RequestOptions = {
+    method: "POST",
+    body: {
+      name: input.name,
+      data_warehouse_type: input.dataWarehouseType,
+      description: input.description,
+      is_runnable_concurrently: input.isRunnableConcurrently,
+      datamart_bigquery_option: {
+        bigquery_connection_id:
+          input.datamartBigqueryOption?.bigqueryConnectionId,
+        query_mode: input.datamartBigqueryOption?.queryMode,
+        query: input.datamartBigqueryOption?.query,
+        destination_dataset: input.datamartBigqueryOption?.destinationDataset,
+        destination_table: input.datamartBigqueryOption?.destinationTable,
+        write_disposition: input.datamartBigqueryOption?.writeDisposition,
+      },
+    },
+  };
+  const datamartDefinition = await troccoRequest<DatamartDefinition>(
+    url,
+    options,
+  );
+  return {
+    id: datamartDefinition.id,
+    name: datamartDefinition.name,
+    data_warehouse_type: datamartDefinition.data_warehouse_type,
+    description: datamartDefinition.description,
+    is_runnable_concurrently: datamartDefinition.is_runnable_concurrently,
+    datamart_bigquery_option: datamartDefinition.datamart_bigquery_option,
+  };
 }
 
 type PaginationResponse<Item> = {
@@ -111,6 +187,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         description: "List TROCCO connections of a given type",
         inputSchema: zodToJsonSchema(ListConnectionsInputSchema),
       },
+      {
+        name: "create_datamart_definition",
+        description: "Create a TROCCO datamart definition",
+        inputSchema: zodToJsonSchema(CreateDatamartDefinitionInputSchema),
+      },
     ],
   };
 });
@@ -125,6 +206,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const connections = await listConnections(input);
       return {
         content: [{ type: "text", text: JSON.stringify(connections, null, 2) }],
+      };
+    }
+    case "create_datamart_definition": {
+      const input = CreateDatamartDefinitionInputSchema.parse(
+        request.params.arguments,
+      );
+      const result = await createDatamartDefinition(input);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
     }
     default: {
