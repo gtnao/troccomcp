@@ -68,10 +68,15 @@ const CreateDatamartDefinitionInputSchema = z.object({
     .describe("required if dataWarehouseType is bigquery"),
 });
 
+const RunDatamartJobInputSchema = z.object({
+  datamartDefinitionId: z.number(),
+});
+
 type Connection = {
   id: string;
   name: string;
   description: string;
+  project_id?: string;
 };
 
 async function listConnections(
@@ -83,6 +88,7 @@ async function listConnections(
     id: connection.id,
     name: connection.name,
     description: connection.description,
+    project_id: connection.project_id,
   }));
 }
 
@@ -135,6 +141,26 @@ async function createDatamartDefinition(
     description: datamartDefinition.description,
     is_runnable_concurrently: datamartDefinition.is_runnable_concurrently,
     datamart_bigquery_option: datamartDefinition.datamart_bigquery_option,
+  };
+}
+
+type DatamartJob = {
+  id: number;
+};
+
+async function runDatamartJob(
+  input: z.infer<typeof RunDatamartJobInputSchema>,
+): Promise<DatamartJob> {
+  const url = `https://trocco.io/api/datamart_jobs`;
+  const options: RequestOptions = {
+    method: "POST",
+    body: {
+      datamart_definition_id: input.datamartDefinitionId,
+    },
+  };
+  const datamartJob = await troccoRequest<DatamartJob>(url, options);
+  return {
+    id: datamartJob.id,
   };
 }
 
@@ -192,6 +218,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         description: "Create a TROCCO datamart definition",
         inputSchema: zodToJsonSchema(CreateDatamartDefinitionInputSchema),
       },
+      {
+        name: "run_datamart_job",
+        description: "Run a TROCCO datamart job",
+        inputSchema: zodToJsonSchema(RunDatamartJobInputSchema),
+      },
     ],
   };
 });
@@ -213,6 +244,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         request.params.arguments,
       );
       const result = await createDatamartDefinition(input);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+    case "run_datamart_job": {
+      const input = RunDatamartJobInputSchema.parse(request.params.arguments);
+      const result = await runDatamartJob(input);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
