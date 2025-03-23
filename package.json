@@ -1,0 +1,27 @@
+{
+  "name": "troccomcp",
+  "version": "0.1.0",
+  "description": "MCP server for using the TROCCO API",
+  "license": "MIT",
+  "author": "naotaka nakane <n.nakane0219@gmail.com>",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc && chmod 755 build/index.js"
+  },
+  "type": "module",
+  "bin": {
+    "mcp-server-trocco": "./build/index.js"
+  },
+  "files": [
+    "build"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.7.0",
+    "zod": "^3.24.2",
+    "zod-to-json-schema": "^3.24.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.11",
+    "typescript": "^5.8.2"
+  }
+}
